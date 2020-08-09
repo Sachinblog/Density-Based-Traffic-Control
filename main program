@@ -1,0 +1,399 @@
+#include <p18f46k22.h>    
+#include <stdio.h> 
+#include <string.h>
+#include <stdlib.h>
+#include "ProjectMain.h"  
+#include "serial_codes.h"
+#include "ADC.H" 
+#include "PinAllocation.h"
+#include "LCD.h"
+#include "delay.h"
+#include "timers.h"
+#include "wifimodule.h" 
+
+unsigned char guchLCDLine1String[17],guchLCDLine2String[17];
+unsigned char uchBuffDisplay[] = "WELCOME\n\r";
+#pragma udata udata3
+unsigned char uchRecieve150Ch[150],i = 0;
+unsigned int guchDataTowebsite;
+extern unsigned int gunField1Value,gunField2Value,gunField3Value,gunField4Value,gunField5Value,gunField6Value,gunField7Value,gunField8Value;
+unsigned long ulVoltageInVolts;
+extern unsigned char guchField5Value;
+extern unsigned int gunDataFromFields;
+unsigned char guchSendingData[10]= "TESTED OK";
+
+
+
+
+//................density based traffic variables...............
+unsigned char guchNorthTrafficWeight;
+unsigned char guchEastTrafficWeight;
+unsigned char guchWestTrafficWeight;
+unsigned char guchSouthTrafficWeight;
+
+//...function to turn ON the traffic light in N-E-W-S direction manner........... 
+void fnRoundRobin(void)
+{
+	fnAllowNorth();
+	
+	fnAllowEast();
+	
+	fnAllowWest();
+	
+	fnAllowSouth();
+	
+}
+
+//...function turns on the green light of North direction.........
+void fnAllowNorth(void)
+{
+	if(TRAFFIC_LED_NORTH_RED==SET_ON)
+	{
+		TRAFFIC_LED_NORTH_YELLOW = SET_ON;
+		delay_in_seconds(1);
+	}
+	TRAFFIC_LED_NORTH_YELLOW = SET_OFF ;
+	TRAFFIC_LED_NORTH_RED	 = SET_OFF ;
+	TRAFFIC_LED_NORTH_GREEN	 = SET_ON ;
+	TRAFFIC_LED_EAST_RED	 = SET_ON ;
+	TRAFFIC_LED_EAST_GREEN	 = SET_OFF ;
+	TRAFFIC_LED_WEST_RED	 = SET_ON ;
+	TRAFFIC_LED_WEST_GREEN	 = SET_OFF ;
+	TRAFFIC_LED_SOUTH_RED	 = SET_ON ;
+	TRAFFIC_LED_SOUTH_GREEN	 = SET_OFF ;
+	delay_in_seconds(1);
+}
+
+//...function turns on the green light of East direction.........
+void fnAllowEast(void)
+{
+	if(TRAFFIC_LED_EAST_RED==SET_ON)
+	{
+		TRAFFIC_LED_EAST_YELLOW = SET_ON;
+		delay_in_seconds(1);
+	}
+	TRAFFIC_LED_EAST_YELLOW = SET_OFF;
+	TRAFFIC_LED_NORTH_RED	= SET_ON ;
+	TRAFFIC_LED_NORTH_GREEN	= SET_OFF ;
+	TRAFFIC_LED_EAST_RED	= SET_OFF ;
+	TRAFFIC_LED_EAST_GREEN	= SET_ON ;
+	TRAFFIC_LED_WEST_RED	= SET_ON ;
+	TRAFFIC_LED_WEST_GREEN	= SET_OFF ;
+	TRAFFIC_LED_SOUTH_RED	= SET_ON ;
+	TRAFFIC_LED_SOUTH_GREEN	= SET_OFF ;
+	delay_in_seconds(2);
+}
+
+//...function turns on the green light of West direction.........
+void fnAllowWest(void)
+{
+	if(TRAFFIC_LED_WEST_RED==SET_ON)
+	{
+		TRAFFIC_LED_WEST_YELLOW = SET_ON;
+		delay_in_seconds(1);
+	}
+	TRAFFIC_LED_WEST_YELLOW = SET_OFF;
+	TRAFFIC_LED_NORTH_RED	= SET_ON ;
+	TRAFFIC_LED_NORTH_GREEN	= SET_OFF ;
+	TRAFFIC_LED_EAST_RED	= SET_ON ;
+	TRAFFIC_LED_EAST_GREEN	= SET_OFF ;
+	TRAFFIC_LED_WEST_RED	= SET_OFF ;
+	TRAFFIC_LED_WEST_GREEN	= SET_ON ;
+	TRAFFIC_LED_SOUTH_RED	= SET_ON ;
+	TRAFFIC_LED_SOUTH_GREEN	= SET_OFF ;
+	delay_in_seconds(2);
+}
+
+//...function turns on the green light of South direction.........
+void fnAllowSouth(void)
+{
+	if(TRAFFIC_LED_SOUTH_RED==SET_ON)
+	{
+		TRAFFIC_LED_SOUTH_YELLOW = SET_ON;
+		delay_in_seconds(1);
+	}
+	TRAFFIC_LED_SOUTH_YELLOW= SET_OFF;
+	TRAFFIC_LED_NORTH_RED	= SET_ON ;
+	TRAFFIC_LED_NORTH_GREEN	= SET_OFF ;
+	TRAFFIC_LED_EAST_RED	= SET_ON ;
+	TRAFFIC_LED_EAST_GREEN	= SET_OFF ;
+	TRAFFIC_LED_WEST_RED	= SET_ON ;
+	TRAFFIC_LED_WEST_GREEN	= SET_OFF ;
+	TRAFFIC_LED_SOUTH_RED	= SET_OFF ;
+	TRAFFIC_LED_SOUTH_GREEN	= SET_ON ;
+	delay_in_seconds(2);
+}
+
+
+
+//....function to detect 3 IR sensors in NORTH direction...........
+void fnDetectTrafficNorth(void)
+{
+	guchNorthTrafficWeight = 0;
+	if(SENSOR_NORTH_1 == VEHICLE_DETECTED)
+	{
+		guchNorthTrafficWeight++;
+	}
+	if(SENSOR_NORTH_2 == VEHICLE_DETECTED)
+	{
+		guchNorthTrafficWeight++;
+	}
+	if(SENSOR_NORTH_3 == VEHICLE_DETECTED)
+	{
+		guchNorthTrafficWeight++;
+	}
+}
+
+//....function to detect 3 IR sensors in EAST direction...........
+void fnDetectTrafficEast(void)
+{
+	guchEastTrafficWeight = 0;
+	if(SENSOR_EAST_1 == VEHICLE_DETECTED)
+	{
+		guchEastTrafficWeight++;
+	}
+	if(SENSOR_EAST_2 == VEHICLE_DETECTED)
+	{
+		guchEastTrafficWeight++;
+	}
+	if(SENSOR_EAST_3 == VEHICLE_DETECTED)
+	{
+		guchEastTrafficWeight++;
+	}
+}
+
+
+//....function to detect 3 IR sensors in WEST direction...........
+void fnDetectTrafficWest(void)
+{
+	guchWestTrafficWeight = 0;
+	if(SENSOR_WEST_1 == VEHICLE_DETECTED)
+	{
+		guchWestTrafficWeight++;
+	}
+	if(SENSOR_WEST_2 == VEHICLE_DETECTED)
+	{
+		guchWestTrafficWeight++;
+	}
+	if(SENSOR_WEST_3 == VEHICLE_DETECTED)
+	{
+		guchWestTrafficWeight++;
+	}
+}
+
+
+//....function to detect 3 IR sensors in SOUTH direction...........
+void fnDetectTrafficSouth(void)
+{
+	guchSouthTrafficWeight = 0;
+	if(SENSOR_SOUTH_1 == VEHICLE_DETECTED)
+	{
+		guchSouthTrafficWeight++;
+	}
+	if(SENSOR_SOUTH_2 == VEHICLE_DETECTED)
+	{
+		guchSouthTrafficWeight++;
+	}
+	if(SENSOR_SOUTH_3 == VEHICLE_DETECTED)
+	{
+		guchSouthTrafficWeight++;
+	}
+}
+
+
+//main function begins
+
+void fnMain_Project()
+{
+	
+
+	unsigned char uchLoopCounter = 0;
+
+
+	unsigned int unTemperatureValue; 
+	unsigned int unADCvalueSmokeSensor =0;
+	unsigned int unDataFromThingspeakforDeviceControl = 0;
+	unsigned int unDataFromField1,unDataFromField2;
+	unsigned char uchCommandForRobot;
+	unsigned char a=10,b=5,c=0;
+	unsigned char uchData;
+	unsigned char uchData1;
+	
+ 	unsigned char uchRecieve150Ch[10],i = 0;
+ 	unsigned char uchtemp;
+ 	
+ 	unsigned char uchTempvalue[];
+ 	unsigned int  unADCvalue1=0;
+ 	unsigned int  unADCvalue2=0;
+ 	unsigned int  unADCvalue3=0;
+ 	unsigned int  unADCvalue4=0;
+	
+ 	ANSELA = 0X00;
+	Dir_DEVICE_0   = SET_OUTPUT;
+	Dir_DEVICE_1   = SET_OUTPUT;
+	Dir_DEVICE_2   = SET_OUTPUT;
+	Dir_DEVICE_3   = SET_OUTPUT;
+	Dir_DEVICE_4   = SET_OUTPUT;
+	Dir_DEVICE_5   = SET_OUTPUT;
+
+	Dir_BUZZER     		= SET_INPUT;
+	BUZZER			 	= BUZZER_OFF; 
+
+	DEVICE_0   = DEVICE_OFF;
+	DEVICE_1   = DEVICE_OFF;
+	DEVICE_2   = DEVICE_OFF;
+	DEVICE_3   = DEVICE_OFF;
+	DEVICE_4   = DEVICE_OFF;
+	DEVICE_5   = DEVICE_OFF;
+
+
+
+	Ans_TRAFFIC_LED_NORTH_RED	= SET_DIGITAL;
+	Ans_TRAFFIC_LED_NORTH_GREEN	= SET_DIGITAL;
+	Ans_TRAFFIC_LED_EAST_RED	= SET_DIGITAL;
+	Ans_TRAFFIC_LED_EAST_GREEN	= SET_DIGITAL;
+//	Ans_TRAFFIC_LED_WEST_RED	= SET_DIGITAL;
+	Ans_TRAFFIC_LED_WEST_GREEN	= SET_DIGITAL;
+	Ans_TRAFFIC_LED_SOUTH_RED	= SET_DIGITAL;
+	Ans_TRAFFIC_LED_SOUTH_GREEN	= SET_DIGITAL;
+
+	Ans_TRAFFIC_LED_NORTH_YELLOW  =SET_DIGITAL;
+    Ans_TRAFFIC_LED_EAST_YELLOW   =SET_DIGITAL;
+    Ans_TRAFFIC_LED_WEST_YELLOW   =SET_DIGITAL;
+    Ans_TRAFFIC_LED_SOUTH_YELLOW  =SET_DIGITAL;
+
+	Dir_TRAFFIC_LED_NORTH_RED	= SET_OUTPUT;
+	Dir_TRAFFIC_LED_NORTH_GREEN	= SET_OUTPUT;
+	Dir_TRAFFIC_LED_EAST_RED	= SET_OUTPUT;
+	Dir_TRAFFIC_LED_EAST_GREEN	= SET_OUTPUT;
+	Dir_TRAFFIC_LED_WEST_RED	= SET_OUTPUT;
+	Dir_TRAFFIC_LED_WEST_GREEN	= SET_OUTPUT;
+	Dir_TRAFFIC_LED_SOUTH_RED	= SET_OUTPUT;
+	Dir_TRAFFIC_LED_SOUTH_GREEN	= SET_OUTPUT;
+
+	Dir_TRAFFIC_LED_NORTH_YELLOW = SET_OUTPUT;  
+    Dir_TRAFFIC_LED_EAST_YELLOW  = SET_OUTPUT;
+    Dir_TRAFFIC_LED_WEST_YELLOW  = SET_OUTPUT;
+    Dir_TRAFFIC_LED_SOUTH_YELLOW = SET_OUTPUT; 
+
+
+
+	Ans_SENSOR_NORTH_1	= SET_DIGITAL;
+	Ans_SENSOR_NORTH_2	= SET_DIGITAL;
+	Ans_SENSOR_NORTH_3	= SET_DIGITAL;
+	Ans_SENSOR_EAST_1	= SET_DIGITAL;
+	Ans_SENSOR_EAST_2	= SET_DIGITAL;
+	Ans_SENSOR_EAST_3	= SET_DIGITAL;
+	Ans_SENSOR_WEST_1	= SET_DIGITAL;
+	Ans_SENSOR_WEST_2	= SET_DIGITAL;
+	Ans_SENSOR_WEST_3	= SET_DIGITAL;
+	Ans_SENSOR_SOUTH_1	= SET_DIGITAL;
+	Ans_SENSOR_SOUTH_2	= SET_DIGITAL;
+	Ans_SENSOR_SOUTH_3	= SET_DIGITAL;
+
+	Dir_SENSOR_NORTH_1	= SET_INPUT;
+	Dir_SENSOR_NORTH_2	= SET_INPUT;
+	Dir_SENSOR_NORTH_3	= SET_INPUT;
+	Dir_SENSOR_EAST_1	= SET_INPUT;
+	Dir_SENSOR_EAST_2	= SET_INPUT;
+	Dir_SENSOR_EAST_3	= SET_INPUT;
+	Dir_SENSOR_WEST_1	= SET_INPUT;
+	Dir_SENSOR_WEST_2	= SET_INPUT;
+	Dir_SENSOR_WEST_3	= SET_INPUT;
+	Dir_SENSOR_SOUTH_1	= SET_INPUT;
+	Dir_SENSOR_SOUTH_2	= SET_INPUT;
+	Dir_SENSOR_SOUTH_3	= SET_INPUT;
+
+
+
+
+
+	while(1)
+	{
+		
+		//Detecting traffic in each direction
+		fnDetectTrafficNorth();
+		fnDetectTrafficEast();
+		fnDetectTrafficWest();
+		fnDetectTrafficSouth();
+
+		printf("guchNorthTrafficWeight = %d\n", guchNorthTrafficWeight); 
+		printf("guchEastTrafficWeight  = %d\n", guchEastTrafficWeight); 
+		printf("guchWestTrafficWeight  = %d\n", guchWestTrafficWeight); 
+		printf("guchSouthTrafficWeight = %d\n", guchSouthTrafficWeight); 
+
+
+		if((guchNorthTrafficWeight > guchEastTrafficWeight) && (guchNorthTrafficWeight > guchWestTrafficWeight) && (guchNorthTrafficWeight > guchSouthTrafficWeight))
+		{
+			fnAllowNorth();//allow North road if it has highest density 
+		}
+		else if (( guchEastTrafficWeight > guchNorthTrafficWeight) && (guchEastTrafficWeight > guchWestTrafficWeight) && (guchEastTrafficWeight > guchSouthTrafficWeight))
+		{
+			fnAllowEast();//allow East road if it has highest density
+		}	
+		else if (( guchWestTrafficWeight > guchNorthTrafficWeight) && (guchWestTrafficWeight > guchEastTrafficWeight) && (guchWestTrafficWeight > guchSouthTrafficWeight))
+		{
+			fnAllowWest();//allow West road if it has highest density
+		}
+		else if (( guchSouthTrafficWeight > guchNorthTrafficWeight) && (guchSouthTrafficWeight > guchEastTrafficWeight) && (guchSouthTrafficWeight > guchWestTrafficWeight))
+		{
+			fnAllowSouth();//allow South road if it has highest density
+		}
+		else if (( guchNorthTrafficWeight == guchEastTrafficWeight) && (guchNorthTrafficWeight > guchWestTrafficWeight) && (guchNorthTrafficWeight > guchSouthTrafficWeight))
+		{
+			fnAllowNorth();//If North and East are equal then allow North
+		}
+		else if (( guchNorthTrafficWeight == guchWestTrafficWeight) && (guchNorthTrafficWeight > guchEastTrafficWeight) && (guchNorthTrafficWeight > guchSouthTrafficWeight))
+		{
+			fnAllowNorth();//If North and West are equal then allow North
+		}
+		else if (( guchNorthTrafficWeight == guchSouthTrafficWeight) && (guchNorthTrafficWeight > guchWestTrafficWeight) && (guchNorthTrafficWeight > guchEastTrafficWeight))
+		{
+			fnAllowNorth();//If North and south are equal then allow North
+		}
+		else if (( guchEastTrafficWeight == guchWestTrafficWeight) && (guchEastTrafficWeight > guchNorthTrafficWeight) && (guchEastTrafficWeight > guchSouthTrafficWeight))
+		{
+			fnAllowEast();//If East and West are equal then allow East
+		}
+		else if (( guchEastTrafficWeight == guchSouthTrafficWeight) && (guchEastTrafficWeight > guchNorthTrafficWeight) && (guchEastTrafficWeight > guchWestTrafficWeight))
+		{
+			fnAllowEast();//If East and South are equal then allow East
+		}
+		else if (( guchWestTrafficWeight == guchSouthTrafficWeight) && (guchWestTrafficWeight > guchNorthTrafficWeight) && (guchWestTrafficWeight > guchEastTrafficWeight))
+		{
+			fnAllowWest();//If West and South are equal then allow West
+		}
+		else if (( (guchNorthTrafficWeight == guchEastTrafficWeight) == (guchNorthTrafficWeight == guchWestTrafficWeight)) && (guchNorthTrafficWeight > guchSouthTrafficWeight))
+		{
+			fnAllowNorth();//If North,East and West are equal then allow North
+		}
+		else if (( (guchNorthTrafficWeight == guchWestTrafficWeight) == (guchNorthTrafficWeight == guchSouthTrafficWeight)) && (guchNorthTrafficWeight > guchEastTrafficWeight))
+		{
+			fnAllowNorth();//If North,South and West are equal then allow North
+		}
+		else if (( (guchNorthTrafficWeight == guchEastTrafficWeight) == (guchNorthTrafficWeight == guchSouthTrafficWeight)) && (guchNorthTrafficWeight > guchWestTrafficWeight))
+		{
+			fnAllowNorth();//If North,East and South are equal then allow North
+		}
+		else if (( (guchSouthTrafficWeight == guchEastTrafficWeight) == (guchSouthTrafficWeight == guchWestTrafficWeight)) && (guchEastTrafficWeight > guchNorthTrafficWeight))
+		{
+			fnAllowEast();//If North,East and West are equal then allow East
+		}
+		else
+		{
+			fnAllowNorth();//If all are equal then allow North
+		}
+
+		//After detecting traffic 4 times allow each road in N-E-W-S round robin fashion once
+		uchLoopCounter++;
+		if(uchLoopCounter >= 4)
+		{
+			uchLoopCounter=0;
+			fnRoundRobin();
+		}
+
+	}
+}
+
+
+
